@@ -10,6 +10,22 @@ Erases HDDs, SATA SSDs and NVMe SSDs and writes one PDF report per drive (cover 
 
 Several drives can be erased in one run, each with its own comment and report. ATA/NVMe drives run one after another, several nwipe runs in parallel. Frozen ATA drives are handled via standby (S3) or by asking you to replug the drive.
 
+## Screenshots
+
+Erasing three drives at once: ATA Secure Erase with the vendor's time estimate, two nwipe runs with measured progress. The boot stick itself is locked.
+
+![Main window during erasure](docs/screenshot-gui.png)
+
+Nothing is erased without typing `yes`:
+
+![Confirmation dialog](docs/screenshot-confirm.png)
+
+The report (cover page and certificate, here in English; appendices with SMART data, hexdump and logs follow):
+
+![Report cover page and certificate](docs/screenshot-report.png)
+
+*Screenshots with example data. Add your own `logo.png` and `signature.png` to show your logo and signature.*
+
 ## Setup
 
 ```sh
