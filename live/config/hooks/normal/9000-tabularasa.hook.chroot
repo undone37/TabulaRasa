@@ -1,5 +1,5 @@
 #!/bin/sh
-# Programm einrichten: Python-Umgebung + Chromium für die PDF-Erzeugung, Kiosk beim Start aktivieren.
+# Set up the program: Python environment + Chromium for the PDFs, enable the kiosk at boot.
 set -e
 export PLAYWRIGHT_BROWSERS_PATH=/opt/tabularasa/browsers
 python3 -m venv /opt/tabularasa/.venv

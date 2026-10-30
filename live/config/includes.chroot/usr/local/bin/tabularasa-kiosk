@@ -1,8 +1,8 @@
 #!/bin/sh
-# Hängt die Reports-Partition des Boot-Sticks ein und startet die Oberfläche in Cage.
+# Mounts the REPORTS partition of the boot stick and starts the GUI in Cage.
 MNT=/mnt/reports
 
-# Nur die REPORTS-Partition auf dem Stick, von dem gebootet wurde, nicht irgendeine gleichnamige
+# Only the REPORTS partition on the stick we booted from, not any partition with the same label
 medium=$(findmnt -no SOURCE /run/live/medium 2>/dev/null)
 disk=$(lsblk -no PKNAME "$medium" 2>/dev/null | head -n1)
 [ -n "$disk" ] || disk=$(basename "$medium")
@@ -11,11 +11,13 @@ mkdir -p "$MNT"
 if [ -n "$part" ] && ! mountpoint -q "$MNT"; then
 	mount -t exfat "$part" "$MNT"
 fi
-# Nicht eingehängt? Dann meldet gui.py das (ERASE_KIOSK) statt Reports im RAM zu speichern.
+# Not mounted? Then gui.py reports it (ERASE_KIOSK) instead of saving reports to RAM.
 
 export ERASE_HOME="$MNT" ERASE_KIOSK=1
 export PLAYWRIGHT_BROWSERS_PATH=/opt/tabularasa/browsers
-export XKB_DEFAULT_LAYOUT=de    # Tastatur in Cage, unabhängig von der Konsole
-export WLR_RENDERER=pixman      # Software-Rendering: läuft auch auf alter/exotischer Grafik
+# Keyboard layout in Cage from config.toml (keyboard = "de"), independent of the console
+layout=$(sed -n 's/^keyboard *= *"\([a-z]*\)".*/\1/p' "$MNT/config.toml" 2>/dev/null)
+export XKB_DEFAULT_LAYOUT="${layout:-us}"
+export WLR_RENDERER=pixman      # software rendering: also works on old/exotic graphics
 cd /opt/tabularasa || exit 1
 exec cage -- /opt/tabularasa/.venv/bin/python /opt/tabularasa/gui.py

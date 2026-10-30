@@ -1,8 +1,8 @@
 #!/usr/bin/env python3
-"""Desktop-Oberfläche für erase.py. Start: sudo .venv/bin/python gui.py
+"""Desktop GUI for erase.py. Start: sudo .venv/bin/python gui.py
 
-Die eigentliche Arbeit (Frozen-Behandlung, Löschen, Reports) macht erase.run_all,
-die GUI sammelt nur die Eingaben ein und zeigt Status und Ausgabe an.
+The actual work (frozen handling, erasing, reports) is done by erase.run_all;
+the GUI only collects the input and shows status and output.
 """
 
 import base64
@@ -25,7 +25,7 @@ ANSI = re.compile(r"\x1b\[[0-9;]*m")
 
 
 class QueueWriter:
-    """Ersetzt sys.stdout: print() aus allen Threads landet im Ausgabefenster."""
+    """Replaces sys.stdout: print() from any thread ends up in the output pane."""
 
     def __init__(self, q):
         self.q = q
@@ -38,7 +38,7 @@ class QueueWriter:
 
 
 def small_logo(path, width=240):
-    """Glatt verkleinert per ImageMagick, sonst pixelig per subsample (Tk selbst kann nicht interpolieren)."""
+    """Smooth downscale via ImageMagick, otherwise pixelated via subsample (Tk itself cannot interpolate)."""
     tool = shutil.which("magick") or shutil.which("convert")
     if tool:
         out = subprocess.run([tool, str(path), "-filter", "Lanczos", "-resize", f"{width}x", "png:-"],
@@ -51,7 +51,7 @@ def small_logo(path, width=240):
 
 class App:
     def __init__(self, root, defaults):
-        self.place = defaults.get("place", "")
+        self.place, self.language = defaults.get("place", ""), defaults["language"]
         self.root, self.q, self.rows, self.running, self.active = root, queue.Queue(), [], False, []
         root.title("TabulaRasa")
         root.configure(bg=BG)
@@ -72,8 +72,8 @@ class App:
         self.meta = {}
         fields = ttk.Frame(body)
         fields.pack(fill="x")
-        for col, (title, keys) in enumerate([("Ausführende Firma", erase.META_FIELDS[:4]),
-                                             ("Kunde", erase.META_FIELDS[4:])]):
+        for col, (title, keys) in enumerate([("Performing company", erase.META_FIELDS[:4]),
+                                             ("Customer", erase.META_FIELDS[4:])]):
             box = ttk.Frame(fields)
             box.grid(row=0, column=col, sticky="nsew", padx=(0, 24) if col == 0 else 0)
             fields.columnconfigure(col, weight=1)
@@ -84,21 +84,21 @@ class App:
                 ttk.Entry(box, textvariable=self.meta[key]).pack(fill="x")
 
         ttk.Frame(body, height=18).pack()
-        self.section(body, "Laufwerke")
+        self.section(body, "Drives")
         self.table = ttk.Frame(body)
         self.table.pack(fill="x")
 
         buttons = ttk.Frame(body)
         buttons.pack(fill="x", pady=14)
-        self.refresh_btn = ttk.Button(buttons, text="Laufwerke neu einlesen", command=self.load_disks)
+        self.refresh_btn = ttk.Button(buttons, text="Rescan drives", command=self.load_disks)
         self.refresh_btn.pack(side="left")
-        if os.environ.get("ERASE_KIOSK"):  # Live-Stick: kein Desktop, über den man sonst ausschalten könnte
-            self.off_btn = ttk.Button(buttons, text="Ausschalten", command=self.poweroff)
+        if os.environ.get("ERASE_KIOSK"):  # live stick: there is no desktop to power off from
+            self.off_btn = ttk.Button(buttons, text="Power off", command=self.poweroff)
             self.off_btn.pack(side="left", padx=8)
-        self.start_btn = ttk.Button(buttons, text="Löschen starten", style="Accent.TButton", command=self.start)
+        self.start_btn = ttk.Button(buttons, text="Start erasing", style="Accent.TButton", command=self.start)
         self.start_btn.pack(side="right")
 
-        self.section(body, "Ausgabe")
+        self.section(body, "Output")
         log = ttk.Frame(body)
         log.pack(fill="both", expand=True)
         self.log = tk.Text(log, height=10, font=("DejaVu Sans Mono", 9), fg=INK, bg="#fafafa", relief="flat",
@@ -140,13 +140,13 @@ class App:
         ttk.Label(parent, text=title, style="Section.TLabel").pack(anchor="w")
         tk.Frame(parent, height=2, bg=ACCENT).pack(fill="x", pady=(2, 6))
 
-    # --- Laufwerksliste ---
+    # --- Drive list ---
 
     def load_disks(self):
         for child in self.table.winfo_children():
             child.destroy()
         self.rows = []
-        for col, title in enumerate(["", "Gerät", "Modell", "Seriennummer", "Größe", "Methode", "Bemerkung", "Status"]):
+        for col, title in enumerate(["", "Device", "Model", "Serial number", "Size", "Method", "Comment", "Status"]):
             ttk.Label(self.table, text=title.upper(), style="Muted.TLabel").grid(row=0, column=col, sticky="w", padx=4)
         self.table.columnconfigure(6, weight=1)
         for r, info in enumerate(erase.list_disks(), 1):
@@ -164,17 +164,17 @@ class App:
             comment.grid(row=r, column=6, sticky="ew", padx=4)
             row["status"] = ttk.Label(self.table, text="", width=26)
             row["status"].grid(row=r, column=7, sticky="w", padx=4)
-            # Laufend: Balken + Text (Prozent, Tempo, Restzeit) statt Status-Text
+            # While running: bar + text (percent, speed, time left) instead of the status text
             row["progress"] = ttk.Frame(self.table)
             row["bar"] = ttk.Progressbar(row["progress"], mode="indeterminate", length=230)
             row["bar"].pack(anchor="w")
             row["eta"] = ttk.Label(row["progress"], text="", style="Muted.TLabel")
             row["eta"].pack(anchor="w")
             row["widgets"] = [check, method, comment]
-            if info["mounted"]:  # z.B. das Live-System selbst: gar nicht erst auswählbar
+            if info["mounted"]:  # e.g. the live system itself: not selectable at all
                 for w in row["widgets"]:
                     w.state(["disabled"])
-                row["status"].configure(text="eingehängt, gesperrt", foreground=MUTED)
+                row["status"].configure(text="mounted, locked", foreground=MUTED)
             self.rows.append(row)
 
     # --- Start ---
@@ -182,7 +182,7 @@ class App:
     def start(self):
         chosen = [row for row in self.rows if row["check"].get()]
         if not chosen:
-            messagebox.showinfo("TabulaRasa", "Bitte mindestens ein Laufwerk auswählen.", parent=self.root)
+            messagebox.showinfo("TabulaRasa", "Please select at least one drive.", parent=self.root)
             return
         disks = []
         try:
@@ -190,26 +190,26 @@ class App:
                 info, method = row["info"], row["method"].get()
                 erase.need(erase.METHODS[method][3])
                 path = info["path"]
-                # Seit dem Einlesen könnte etwas eingehängt worden sein
+                # Something may have been mounted since the list was read
                 if erase.run(["lsblk", "-n", "-o", "MOUNTPOINT", path]).stdout.strip():
-                    erase.die(f"{path} hat eingehängte Partitionen. Bitte aushängen und 'Aktualisieren'.")
-                # Vorab prüfen, nicht erst mitten im Lauf: dann kann direkt nwipe gewählt werden
+                    erase.die(f"{path} has mounted partitions. Please unmount them and click 'Rescan drives'.")
+                # Check up front, not halfway through the run: then nwipe can be chosen right away
                 if method == "ata" and not erase.security_status(path)["supported"]:
                     row["method"].set("nwipe")
-                    erase.die(f"{path} unterstützt kein ATA Security (USB-Adapter?).\n"
-                              "Methode wurde auf 'nwipe' gesetzt, bitte prüfen und erneut starten.")
+                    erase.die(f"{path} does not support ATA Security (USB adapter?).\n"
+                              "The method was set to 'nwipe', please check and start again.")
                 disks.append({"device": path, "info": info, "serial": info["serial"].strip(),
                               "method": method, "comment": row["comment"].get().strip(), "row": row})
-        except erase.Abbruch as e:
+        except erase.Abort as e:
             messagebox.showerror("TabulaRasa", str(e), parent=self.root)
             return
 
         lines = "\n".join(f"• {d['device']}  {d['info']['model'].strip()} / {d['serial']}  →  "
                           f"{erase.METHODS[d['method']][2]}" for d in disks)
         answer = simpledialog.askstring(
-            "ACHTUNG", f"Alle Daten auf diesen Laufwerken werden UNWIDERRUFLICH ZERSTÖRT:\n\n{lines}\n\n"
-                       "Zum Bestätigen 'ja' eingeben:", parent=self.root)
-        if (answer or "").strip() != "ja":
+            "WARNING", f"All data on these drives will be IRREVERSIBLY DESTROYED:\n\n{lines}\n\n"
+                       "Type 'yes' to confirm:", parent=self.root)
+        if (answer or "").strip() != "yes":
             return
 
         self.running = True
@@ -219,24 +219,24 @@ class App:
             for w in row["widgets"]:
                 w.state(["disabled"])
         meta = {k: v.get().strip() or "-" for k, v in self.meta.items()}
-        meta["place"] = self.place
+        meta["place"], meta["language"] = self.place, self.language
         threading.Thread(target=self.work, args=(disks, meta), daemon=True).start()
 
     def work(self, disks, meta):
         try:
             erase.run_all(disks, meta, prompt=self.prompt, quiet=True,
                           on_status=lambda d: self.q.put(lambda: self.show_status(d)))
-        except Exception:  # noqa: BLE001 - unerwartete Fehler sichtbar machen statt still zu sterben
+        except Exception:  # noqa: BLE001 - show unexpected errors instead of dying silently
             print(traceback.format_exc())
         self.q.put(lambda: self.done(disks))
 
     def prompt(self, msg):
-        """Rückfrage aus dem Arbeits-Thread: Dialog im GUI-Thread öffnen und auf Antwort warten."""
+        """Question from the worker thread: open the dialog in the GUI thread and wait for the answer."""
         answer, ready = [], threading.Event()
 
         def ask():
             answer.append(messagebox.askokcancel(
-                "Laufwerk eingefroren", f"{msg}.\n\nDanach OK klicken, 'Abbrechen' überspringt das Laufwerk.",
+                "Drive frozen", f"{msg}.\n\nThen click OK. 'Cancel' skips the drive.",
                 parent=self.root))
             ready.set()
         self.q.put(ask)
@@ -245,7 +245,7 @@ class App:
 
     def show_status(self, d):
         row, result = d["row"], d["result"]
-        if result == "LÄUFT":
+        if result == "RUNNING":
             row["status"].grid_remove()
             row["progress"].grid(row=row["r"], column=7, sticky="w", padx=4)
             row["bar"].start(12)
@@ -256,17 +256,17 @@ class App:
         row["bar"].stop()
         row["progress"].grid_remove()
         row["status"].grid()
-        row["status"].configure(text=result, foreground=OK if result == "ERFOLGREICH" else FAIL)
+        row["status"].configure(text=result, foreground=OK if result == "SUCCESSFUL" else FAIL)
 
     def done(self, disks):
         self.running = False
         self.start_btn.state(["!disabled"])
         self.refresh_btn.state(["!disabled"])
         summary = "\n".join(f"{d['device']} ({d['serial']}): {d['result']}" for d in disks)
-        messagebox.showinfo("Fertig", f"{summary}\n\nReports liegen in:\n{erase.REPORTS}", parent=self.root)
+        messagebox.showinfo("Done", f"{summary}\n\nReports are in:\n{erase.REPORTS}", parent=self.root)
         self.load_disks()
 
-    # --- Hilfen ---
+    # --- Helpers ---
 
     def poll(self):
         try:
@@ -284,7 +284,7 @@ class App:
         self.root.after(100, self.poll)
 
     def tick(self):
-        """Fortschritt der laufenden Laufwerke jede Sekunde neu berechnen."""
+        """Recalculate the progress of running drives every second."""
         for d in self.active:
             frac, text = erase.progress_of(d)
             bar = d["row"]["bar"]
@@ -293,20 +293,20 @@ class App:
                     bar.stop()
                     bar.configure(mode="determinate", maximum=100)
                 bar.configure(value=frac * 100)
-            d["row"]["eta"].configure(text=text or "läuft …")
+            d["row"]["eta"].configure(text=text or "running …")
         self.root.after(1000, self.tick)
 
     def poweroff(self):
         if self.running:
-            messagebox.showwarning("TabulaRasa", "Löschvorgang läuft noch. Bitte bis zum Ende warten.",
+            messagebox.showwarning("TabulaRasa", "Erasure still running. Please wait until it has finished.",
                                    parent=self.root)
-        elif messagebox.askokcancel("Ausschalten", "Rechner jetzt ausschalten?", parent=self.root):
+        elif messagebox.askokcancel("Power off", "Power off the computer now?", parent=self.root):
             os.sync()
             subprocess.run(["systemctl", "poweroff"], check=False)
 
     def close(self):
-        if self.running:  # Abbruch mitten im ATA Secure Erase kann das Laufwerk gesperrt zurücklassen
-            messagebox.showwarning("TabulaRasa", "Löschvorgang läuft noch. Bitte bis zum Ende warten.",
+        if self.running:  # aborting in the middle of an ATA Secure Erase can leave the drive locked
+            messagebox.showwarning("TabulaRasa", "Erasure still running. Please wait until it has finished.",
                                    parent=self.root)
             return
         self.root.destroy()
@@ -317,12 +317,12 @@ def main():
     try:
         root = tk.Tk()
     except tk.TclError as e:
-        sys.exit(f"Kein Fenster möglich ({e}).\nUnter Wayland einmalig als normaler Benutzer: "
+        sys.exit(f"Cannot open a window ({e}).\nOn Wayland, run once as your normal user: "
                  "xhost +SI:localuser:root")
     try:
         erase.preflight()
         defaults = erase.load_defaults()
-    except erase.Abbruch as e:
+    except erase.Abort as e:
         root.withdraw()
         messagebox.showerror("TabulaRasa", str(e))
         sys.exit(1)

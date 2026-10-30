@@ -1,14 +1,14 @@
 # Kiosk
 cage
 xwayland
-# Live-System
+# Live system
 live-boot
 live-config
 live-config-systemd
 systemd-sysv
 firmware-linux
 tzdata
-# Lösch-Werkzeuge
+# Erase tools
 hdparm
 nvme-cli
 nwipe
@@ -16,7 +16,7 @@ smartmontools
 bsdextrautils
 util-linux
 exfatprogs
-# Oberfläche und Report
+# GUI and report
 python3
 python3-venv
 python3-tk

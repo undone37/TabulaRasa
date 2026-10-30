@@ -1,6 +1,6 @@
-# Cage mit der Lösch-Oberfläche auf tty1 (Muster aus der Cage-Dokumentation, hier als root)
+# Cage with the TabulaRasa GUI on tty1 (pattern from the Cage documentation, here as root)
 [Unit]
-Description=Datenlöschung (Kiosk)
+Description=TabulaRasa (kiosk)
 After=systemd-user-sessions.service plymouth-quit-wait.service dbus.socket systemd-logind.service getty@tty1.service
 Wants=dbus.socket systemd-logind.service
 Conflicts=getty@tty1.service

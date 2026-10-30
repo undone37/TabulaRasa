@@ -1,9 +1,12 @@
-# Vorbelegung der Eingabefelder. Kopieren nach config.toml (Live-Stick: auf die Reports-Partition)
-# und anpassen. Im Programm kann jeder Wert vor dem Löschen noch geändert werden.
+# Defaults for the input fields. Copy to config.toml (live stick: onto the REPORTS partition)
+# and adjust. Every value can still be changed in the program before erasing.
 
-[firma]
-name = "Musterfirma GmbH"
-adresse = "Musterstraße 1, 12345 Musterstadt"
-kontakt = "Erika Mustermann"
-telefon = "+49 123 456789"
-ort = "Musterstadt"  # erscheint unter der Unterschrift: "Musterstadt, den 30. Oktober 2026"
+language = "en"  # report language: "en" or "de" (the program itself is always English)
+keyboard = "us"  # live stick only: keyboard layout, e.g. "us", "de", "gb", "fr"
+
+[company]
+name = "Example Ltd"
+address = "1 Example Street, Exampletown"
+contact = "Jane Doe"
+phone = "+44 20 1234 5678"
+place = "Exampletown"  # shown under the signature: "Exampletown, 30 October 2026"

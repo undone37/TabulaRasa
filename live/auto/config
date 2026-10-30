@@ -1,5 +1,5 @@
 #!/bin/sh
-# Wird von 'lb config' aufgerufen. Debian 13, nur das Nötigste, Hybrid-ISO (BIOS + UEFI + Secure Boot).
+# Called by 'lb config'. Debian 13, only what is needed, hybrid ISO (BIOS + UEFI + Secure Boot).
 set -e
 lb config noauto \
 	--distribution trixie \
