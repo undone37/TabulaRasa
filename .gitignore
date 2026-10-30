@@ -1,0 +1,25 @@
+# Reports enthalten Kundendaten und Seriennummern
+reports/
+# Firmenspezifisches gehört in den Datenordner, nicht ins öffentliche Repo
+unterschrift.png
+logo.png
+config.toml
+__pycache__/
+.venv/
+CI/
+# live-build: von 'lb config' erzeugt oder Build-Ergebnis
+live/.build/
+live/cache/
+live/chroot/
+live/binary/
+live/config/binary
+live/config/bootstrap
+live/config/chroot
+live/config/common
+live/config/source
+live/config/includes.chroot/opt/
+live/*.iso
+live/*.log
+live/*.contents
+live/*.files
+live/*.packages

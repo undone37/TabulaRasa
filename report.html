@@ -1,0 +1,121 @@
+<!DOCTYPE html>
+<html lang="de">
+<head>
+<meta charset="utf-8">
+<title>${title}</title>
+<style>
+  /* CI: Farben aus CI/Logo_Final.svg, Schriften wie im Briefbogen. Druckfreundlich: Farbe nur für Linien und Text, keine Flächen. */
+  :root { --ink: #333333; --muted: #6b6b6b; --line: #d4d4d4; --accent: #509ea3; --ok: #3f8f4c; --fail: #c0392b; }
+  /* statische Comfortaa-Schnitte erzwingen: die Variable-Font wird von Chromium als Type 3 mit kaputter Laufweite eingebettet */
+  @font-face { font-family: "CI Head"; font-weight: 700; src: local("Comfortaa Bold"), local("Comfortaa-Bold"); }
+  @page { size: A4; margin: 2cm 2cm 2.2cm 2cm; }
+  body { font-family: "Quicksand", "DejaVu Sans", Arial, sans-serif; font-weight: 500; font-size: 10pt; color: var(--ink); margin: 0; }
+  h1, h2, h3, .cover .title { font-family: "CI Head", "Comfortaa", "DejaVu Sans", Arial, sans-serif; font-weight: 700; }
+  .mono { font-family: "DejaVu Sans Mono", monospace; }
+  .label { font-size: 7pt; letter-spacing: 0.12em; text-transform: uppercase; color: var(--muted); }
+
+  /* Deckblatt */
+  .cover { height: 25cm; display: flex; flex-direction: column; border-left: 3pt solid var(--accent); padding-left: 1cm; box-sizing: border-box; page-break-after: always; }
+  .cover .logo { width: 7cm; }
+  .cover .title { font-size: 34pt; line-height: 1.15; margin: 4cm 0 0.4cm; }
+  .cover .subtitle { font-size: 13pt; color: var(--muted); }
+  .badge { align-self: flex-start; margin-top: 1.2cm; padding: 6px 14px; border: 1.5pt solid; border-radius: 4px; font-size: 12pt; font-weight: 700; letter-spacing: 0.08em; }
+  .badge.ok { color: var(--ok); }
+  .badge.fail { color: var(--fail); }
+  .facts { margin-top: auto; display: grid; grid-template-columns: 1fr 1fr; border-top: 1pt solid var(--line); }
+  .facts > div { padding: 10px 0; border-bottom: 1pt solid var(--line); }
+  .facts .value { font-size: 12pt; margin-top: 3px; overflow-wrap: anywhere; padding-right: 0.5cm; }
+  .cover .by { margin-top: 1cm; font-size: 9pt; color: var(--muted); }
+
+  /* Zertifikat */
+  .cert { height: 25cm; display: flex; flex-direction: column; page-break-after: always; }
+  .cert .head { display: flex; justify-content: space-between; align-items: center; margin-bottom: 0.6cm; }
+  .cert .head img { width: 4.5cm; }
+  .cert h2 { font-size: 18pt; margin: 0; }
+  table { width: 100%; border-collapse: collapse; margin-bottom: 0.5cm; table-layout: fixed; }
+  th, td { padding: 5px 6px 5px 0; vertical-align: top; text-align: left; border-bottom: 0.5pt solid var(--line); }
+  th.section { font-family: "CI Head", "Comfortaa", "DejaVu Sans", sans-serif; font-size: 9pt; color: var(--accent); border-bottom: 1.2pt solid var(--accent); padding-top: 0; }
+  td.k { width: 17%; font-size: 7.5pt; letter-spacing: 0.06em; text-transform: uppercase; color: var(--muted); padding-top: 7px; }
+  td.v { overflow-wrap: anywhere; }
+  td.status { font-weight: 700; }
+  td.ok { color: var(--ok); }
+  td.fail { color: var(--fail); }
+  .confirm { margin-top: auto; display: flex; align-items: flex-end; }
+  .confirm .text { width: 60%; }
+  .confirm .text p { font-size: 9pt; margin: 4px 0 0; color: var(--muted); }
+  .confirm .sign { width: 40%; text-align: center; font-size: 9pt; }
+  .confirm .sign img { width: 5cm; margin-bottom: -15px; }
+  .confirm .sign .line { border-top: 0.8pt solid var(--ink); width: 6cm; margin: 0 auto 4px; }
+
+  /* Anhänge */
+  h1.appendix { font-size: 18pt; border-bottom: 1.2pt solid var(--accent); padding-bottom: 6px; }
+  h3 { font-size: 11pt; margin-top: 0.8cm; }
+  pre { font-family: "DejaVu Sans Mono", monospace; font-size: 7pt; white-space: pre-wrap; overflow-wrap: anywhere; margin: 0; padding: 8px 10px; border: 0.5pt solid var(--line); border-radius: 4px; }
+</style>
+</head>
+<body>
+
+<section class="cover">
+  ${logo}
+  <div class="title">Protokoll zur<br>Datenlöschung</div>
+  <div class="subtitle">${subtitle}</div>
+  <div class="badge ${status_class}">${final_result}</div>
+  <div class="facts">
+    <div><div class="label">Modell</div><div class="value">${drive_model}</div></div>
+    <div><div class="label">Seriennummer</div><div class="value">${drive_serial}</div></div>
+    <div><div class="label">Kapazität</div><div class="value">${drive_size_gb}</div></div>
+    <div><div class="label">Datum</div><div class="value">${date}</div></div>
+  </div>
+  <div class="by">Durchgeführt von ${author} · ${biz_name}</div>
+</section>
+
+<section class="cert">
+  <div class="head"><h2>Zertifikat zur Datenlöschung</h2>${logo}</div>
+
+  <table>
+    <tr><th class="section" colspan="4">Ausführende Organisation</th></tr>
+    <tr><td class="k">Firma</td><td class="v">${biz_name}</td><td class="k">Kontaktperson</td><td class="v">${biz_contact}</td></tr>
+    <tr><td class="k">Adresse</td><td class="v">${biz_address}</td><td class="k">Telefon</td><td class="v">${biz_phone}</td></tr>
+  </table>
+
+  <table>
+    <tr><th class="section" colspan="4">Kundendetails</th></tr>
+    <tr><td class="k">Name</td><td class="v">${cust_name}</td><td class="k">Kontaktperson</td><td class="v">${cust_contact}</td></tr>
+    <tr><td class="k">Adresse</td><td class="v">${cust_address}</td><td class="k">Telefon</td><td class="v">${cust_phone}</td></tr>
+  </table>
+
+  <table>
+    <tr><th class="section" colspan="4">Geräteinformationen</th></tr>
+    <tr><td class="k">Modell</td><td class="v">${drive_model}</td><td class="k">Seriennummer</td><td class="v mono">${drive_serial}</td></tr>
+    <tr><td class="k">Größe</td><td class="v">${drive_size_gb} (${drive_size_bytes} Bytes)</td><td class="k">Bus</td><td class="v">${bus_type}</td></tr>
+  </table>
+
+  ${comment_block}
+
+  <table>
+    <tr><th class="section" colspan="4">Details zur Löschung</th></tr>
+    <tr><td class="k">Startzeit</td><td class="v">${start_time}</td><td class="k">Endzeit</td><td class="v">${end_time}</td></tr>
+    <tr><td class="k">Dauer</td><td class="v">${duration}</td><td class="k">Status</td><td class="v status ${status_class}">${final_result}</td></tr>
+    <tr><td class="k">Methode</td><td class="v">${erase_method}</td><td class="k">PRNG Algorithmus</td><td class="v">${prng}</td></tr>
+    <tr><td class="k">Durchgänge</td><td class="v">${rounds}</td><td class="k">Verifizierung</td><td class="v">${verification}</td></tr>
+    <tr><td class="k">Gelöschte Bytes</td><td class="v">${bytes_erased}</td><td class="k">Durchsatz</td><td class="v">${throughput}</td></tr>
+    <tr><td class="k">HPA/DCO Status</td><td class="v">${hpa_dco_status}</td><td class="k">Fehler</td><td class="v">${errors}</td></tr>
+  </table>
+
+  <div class="confirm">
+    <div class="text"><b>Bestätigung</b>
+      <p>Hiermit wird bestätigt, dass die oben genannten Löschmaßnahmen am angegebenen Datum erfolgreich durchgeführt wurden.</p>
+    </div>
+    <div class="sign">
+      ${signature}
+      <div class="line"></div>
+      ${place_date}<br>${author}
+    </div>
+  </div>
+</section>
+
+<h1 class="appendix">Anhänge</h1>
+${appendices}
+
+</body>
+</html>

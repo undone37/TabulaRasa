@@ -1,0 +1,21 @@
+#!/bin/sh
+# Hängt die Reports-Partition des Boot-Sticks ein und startet die Oberfläche in Cage.
+MNT=/mnt/reports
+
+# Nur die REPORTS-Partition auf dem Stick, von dem gebootet wurde, nicht irgendeine gleichnamige
+medium=$(findmnt -no SOURCE /run/live/medium 2>/dev/null)
+disk=$(lsblk -no PKNAME "$medium" 2>/dev/null | head -n1)
+[ -n "$disk" ] || disk=$(basename "$medium")
+part=$(lsblk -lnpo PATH,LABEL "/dev/$disk" 2>/dev/null | awk '$2 == "REPORTS" { print $1; exit }')
+mkdir -p "$MNT"
+if [ -n "$part" ] && ! mountpoint -q "$MNT"; then
+	mount -t exfat "$part" "$MNT"
+fi
+# Nicht eingehängt? Dann meldet gui.py das (ERASE_KIOSK) statt Reports im RAM zu speichern.
+
+export ERASE_HOME="$MNT" ERASE_KIOSK=1
+export PLAYWRIGHT_BROWSERS_PATH=/opt/tabularasa/browsers
+export XKB_DEFAULT_LAYOUT=de    # Tastatur in Cage, unabhängig von der Konsole
+export WLR_RENDERER=pixman      # Software-Rendering: läuft auch auf alter/exotischer Grafik
+cd /opt/tabularasa || exit 1
+exec cage -- /opt/tabularasa/.venv/bin/python /opt/tabularasa/gui.py

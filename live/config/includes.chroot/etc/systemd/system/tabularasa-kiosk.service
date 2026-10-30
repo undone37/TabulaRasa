@@ -1,0 +1,23 @@
+# Cage mit der Lösch-Oberfläche auf tty1 (Muster aus der Cage-Dokumentation, hier als root)
+[Unit]
+Description=Datenlöschung (Kiosk)
+After=systemd-user-sessions.service plymouth-quit-wait.service dbus.socket systemd-logind.service getty@tty1.service
+Wants=dbus.socket systemd-logind.service
+Conflicts=getty@tty1.service
+ConditionPathExists=/dev/tty0
+
+[Service]
+ExecStart=/usr/local/bin/tabularasa-kiosk
+Restart=always
+User=root
+UtmpIdentifier=tty1
+UtmpMode=user
+TTYPath=/dev/tty1
+TTYReset=yes
+TTYVHangup=yes
+TTYVTDisallocate=yes
+StandardInput=tty-fail
+PAMName=tabularasa-kiosk
+
+[Install]
+WantedBy=multi-user.target

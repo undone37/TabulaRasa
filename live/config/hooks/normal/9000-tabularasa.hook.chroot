@@ -1,0 +1,9 @@
+#!/bin/sh
+# Programm einrichten: Python-Umgebung + Chromium für die PDF-Erzeugung, Kiosk beim Start aktivieren.
+set -e
+export PLAYWRIGHT_BROWSERS_PATH=/opt/tabularasa/browsers
+python3 -m venv /opt/tabularasa/.venv
+/opt/tabularasa/.venv/bin/pip install --no-cache-dir -r /opt/tabularasa/requirements.txt
+/opt/tabularasa/.venv/bin/python -m playwright install --with-deps chromium
+apt-get clean
+systemctl enable tabularasa-kiosk.service

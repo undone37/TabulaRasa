@@ -1,0 +1,9 @@
+# Vorbelegung der Eingabefelder. Kopieren nach config.toml (Live-Stick: auf die Reports-Partition)
+# und anpassen. Im Programm kann jeder Wert vor dem Löschen noch geändert werden.
+
+[firma]
+name = "Musterfirma GmbH"
+adresse = "Musterstraße 1, 12345 Musterstadt"
+kontakt = "Erika Mustermann"
+telefon = "+49 123 456789"
+ort = "Musterstadt"  # erscheint unter der Unterschrift: "Musterstadt, den 30. Oktober 2026"

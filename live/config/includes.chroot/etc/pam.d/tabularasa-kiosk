@@ -1,0 +1,5 @@
+# Sitzung bei logind anmelden, sonst darf Cage Bildschirm und Tastatur nicht öffnen
+auth     required pam_unix.so nullok
+account  required pam_unix.so
+session  required pam_unix.so
+session  required pam_systemd.so
