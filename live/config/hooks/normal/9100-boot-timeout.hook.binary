@@ -1,0 +1,8 @@
+#!/bin/sh
+# Start the default boot entry after 3 seconds instead of waiting for a key (kiosk).
+# BIOS: isolinux (timeout in 1/10 s), UEFI: GRUB. Fails if live-build changes the file layout.
+set -e
+grep -q '^timeout 0$' isolinux/isolinux.cfg
+sed -i 's/^timeout 0$/timeout 30/' isolinux/isolinux.cfg
+grep -q 'source /boot/grub/config.cfg' boot/grub/grub.cfg
+echo 'set timeout=3' >> boot/grub/config.cfg

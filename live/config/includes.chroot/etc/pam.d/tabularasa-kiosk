@@ -1,5 +1,0 @@
-# Register a logind session, otherwise Cage may not open the screen and keyboard
-auth     required pam_unix.so nullok
-account  required pam_unix.so
-session  required pam_unix.so
-session  required pam_systemd.so

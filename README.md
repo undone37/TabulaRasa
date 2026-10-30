@@ -50,12 +50,16 @@ One report per drive: `erase_report_<serial>_<timestamp>.pdf` (+ `.html`, for nw
 
 Bootable USB stick (Debian 13, 64-bit) that starts straight into the window (kiosk with Cage, no desktop). Boots with BIOS, UEFI and Secure Boot.
 
+Download the ISO from the [releases](https://github.com/undone37/TabulaRasa/releases) (check it with `sha256sum -c tabularasa-*.iso.sha256`) or build it yourself, then write the stick:
+
 ```sh
 sudo apt install live-build
 sudo live/build.sh                                               # -> live/tabularasa.iso
 sudo live/make-stick.sh live/tabularasa.iso /dev/sdX             # new stick, erases EVERYTHING on it
 sudo live/make-stick.sh --update live/tabularasa.iso /dev/sdX    # only renew the system
 ```
+
+`make-stick.sh` needs `exfatprogs` and `fdisk` (for `sfdisk`). CI builds the ISO on every relevant push to `main` (download under Actions → ISO → artifacts) and attaches it to a release for every `v*` tag.
 
 From 4 GiB on, the stick gets an exFAT partition `REPORTS` (readable on Windows/macOS). It is the data folder; `make-stick.sh` copies your `config.toml`, `logo.png` and `signature.png` onto it. `--update` only overwrites the area before it. If an update is interrupted, the stick only boots again after another update, but the reports are kept.
 

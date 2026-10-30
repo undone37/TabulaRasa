@@ -16,7 +16,7 @@ import threading
 import tkinter as tk
 import traceback
 from tkinter import font as tkfont
-from tkinter import messagebox, simpledialog, ttk
+from tkinter import ttk
 
 import erase
 
@@ -126,8 +126,10 @@ class App:
         s.configure("Section.TLabel", font=(head, 10, "bold"), foreground=ACCENT)
         s.configure("Muted.TLabel", foreground=MUTED, font=(text, 8))
         s.configure("TEntry", fieldbackground=BG, padding=5)
-        s.configure("TCombobox", fieldbackground=BG, padding=4)
-        s.map("TCombobox", fieldbackground=[("readonly", BG)])
+        s.configure("Toolbutton", padding=(8, 3), background="#f2f2f2", relief="flat")
+        s.map("Toolbutton", background=[("selected", ACCENT), ("active", "#e6e6e6")],
+              foreground=[("selected", "#ffffff"), ("disabled", MUTED)])
+        s.configure("Card.TFrame", background=BG, borderwidth=1, relief="solid")
         s.configure("TButton", padding=(14, 6), background="#f2f2f2", relief="flat")
         s.map("TButton", background=[("active", "#e6e6e6")])
         s.configure("Accent.TButton", background=ACCENT, foreground="#ffffff", font=(text, 11, "bold"),
@@ -157,9 +159,13 @@ class App:
             for col, value in enumerate([info["path"], info["model"].strip(), info["serial"].strip(),
                                          erase.size_gb(int(info["size"]))], 1):
                 ttk.Label(self.table, text=value).grid(row=r, column=col, sticky="w", padx=4)
-            method = ttk.Combobox(self.table, textvariable=row["method"], values=list(erase.METHODS),
-                                  state="readonly", width=7)
-            method.grid(row=r, column=5, padx=4)
+            # Toggle buttons, not a Combobox: its drop-down list is a separate window (see dialog())
+            methods = ttk.Frame(self.table)
+            methods.grid(row=r, column=5, padx=4)
+            radios = [ttk.Radiobutton(methods, text=m, value=m, variable=row["method"], style="Toolbutton")
+                      for m in erase.METHODS]
+            for rb in radios:
+                rb.pack(side="left")
             comment = ttk.Entry(self.table, textvariable=row["comment"])
             comment.grid(row=r, column=6, sticky="ew", padx=4)
             row["status"] = ttk.Label(self.table, text="", width=26)
@@ -170,7 +176,7 @@ class App:
             row["bar"].pack(anchor="w")
             row["eta"] = ttk.Label(row["progress"], text="", style="Muted.TLabel")
             row["eta"].pack(anchor="w")
-            row["widgets"] = [check, method, comment]
+            row["widgets"] = [check, *radios, comment]
             if info["mounted"]:  # e.g. the live system itself: not selectable at all
                 for w in row["widgets"]:
                     w.state(["disabled"])
@@ -182,7 +188,7 @@ class App:
     def start(self):
         chosen = [row for row in self.rows if row["check"].get()]
         if not chosen:
-            messagebox.showinfo("TabulaRasa", "Please select at least one drive.", parent=self.root)
+            self.dialog("TabulaRasa", "Please select at least one drive.")
             return
         disks = []
         try:
@@ -201,15 +207,15 @@ class App:
                 disks.append({"device": path, "info": info, "serial": info["serial"].strip(),
                               "method": method, "comment": row["comment"].get().strip(), "row": row})
         except erase.Abort as e:
-            messagebox.showerror("TabulaRasa", str(e), parent=self.root)
+            self.dialog("TabulaRasa", str(e))
             return
 
         lines = "\n".join(f"• {d['device']}  {d['info']['model'].strip()} / {d['serial']}  →  "
                           f"{erase.METHODS[d['method']][2]}" for d in disks)
-        answer = simpledialog.askstring(
+        button, answer = self.dialog(
             "WARNING", f"All data on these drives will be IRREVERSIBLY DESTROYED:\n\n{lines}\n\n"
-                       "Type 'yes' to confirm:", parent=self.root)
-        if (answer or "").strip() != "yes":
+                       "Type 'yes' to confirm:", ("Erase", "Cancel"), entry=True)
+        if button != "Erase" or answer.strip() != "yes":
             return
 
         self.running = True
@@ -235,9 +241,8 @@ class App:
         answer, ready = [], threading.Event()
 
         def ask():
-            answer.append(messagebox.askokcancel(
-                "Drive frozen", f"{msg}.\n\nThen click OK. 'Cancel' skips the drive.",
-                parent=self.root))
+            answer.append(self.dialog(
+                "Drive frozen", f"{msg}.\n\nThen click OK. 'Skip' skips the drive.", ("OK", "Skip")) == "OK")
             ready.set()
         self.q.put(ask)
         ready.wait()
@@ -263,10 +268,41 @@ class App:
         self.start_btn.state(["!disabled"])
         self.refresh_btn.state(["!disabled"])
         summary = "\n".join(f"{d['device']} ({d['serial']}): {d['result']}" for d in disks)
-        messagebox.showinfo("Done", f"{summary}\n\nReports are in:\n{erase.REPORTS}", parent=self.root)
+        self.dialog("Done", f"{summary}\n\nReports are in:\n{erase.REPORTS}")
         self.load_disks()
 
     # --- Helpers ---
+
+    def dialog(self, title, text, buttons=("OK",), entry=False):
+        """Modal panel inside the main window. The Cage kiosk compositor does not show separate Tk
+        windows (messagebox, Combobox list), so everything stays in this one window.
+        Returns the clicked button, with entry=True (button, entered text). Enter = first, Escape = last."""
+        cover = tk.Frame(self.root, bg="#e9e9e9")  # hides the window behind the panel (Tk has no transparency)
+        cover.place(relx=0, rely=0, relwidth=1, relheight=1)
+        card = ttk.Frame(cover, padding=24, style="Card.TFrame")
+        card.place(relx=0.5, rely=0.5, anchor="center")
+        ttk.Label(card, text=title, style="Section.TLabel").pack(anchor="w")
+        tk.Frame(card, height=2, bg=ACCENT).pack(fill="x", pady=(2, 10))
+        ttk.Label(card, text=text, wraplength=600, justify="left").pack(anchor="w")
+        value, choice = tk.StringVar(), tk.StringVar()
+        if entry:
+            field = ttk.Entry(card, textvariable=value)
+            field.pack(fill="x", pady=(10, 0))
+        row = ttk.Frame(card)
+        row.pack(fill="x", pady=(18, 0))
+        for label in reversed(buttons):  # first button is the primary one, on the right
+            ttk.Button(row, text=label, style="Accent.TButton" if label == buttons[0] else "TButton",
+                       command=lambda b=label: choice.set(b)).pack(side="right", padx=(8, 0))
+        self.root.bind("<Return>", lambda e: choice.set(buttons[0]))
+        self.root.bind("<Escape>", lambda e: choice.set(buttons[-1]))
+        (field if entry else card).focus_set()
+        cover.grab_set()
+        self.root.wait_variable(choice)
+        cover.grab_release()
+        self.root.unbind("<Return>")
+        self.root.unbind("<Escape>")
+        cover.destroy()
+        return (choice.get(), value.get()) if entry else choice.get()
 
     def poll(self):
         try:
@@ -298,16 +334,14 @@ class App:
 
     def poweroff(self):
         if self.running:
-            messagebox.showwarning("TabulaRasa", "Erasure still running. Please wait until it has finished.",
-                                   parent=self.root)
-        elif messagebox.askokcancel("Power off", "Power off the computer now?", parent=self.root):
+            self.dialog("TabulaRasa", "Erasure still running. Please wait until it has finished.")
+        elif self.dialog("Power off", "Power off the computer now?", ("Power off", "Cancel")) == "Power off":
             os.sync()
             subprocess.run(["systemctl", "poweroff"], check=False)
 
     def close(self):
         if self.running:  # aborting in the middle of an ATA Secure Erase can leave the drive locked
-            messagebox.showwarning("TabulaRasa", "Erasure still running. Please wait until it has finished.",
-                                   parent=self.root)
+            self.dialog("TabulaRasa", "Erasure still running. Please wait until it has finished.")
             return
         self.root.destroy()
 
@@ -323,8 +357,11 @@ def main():
         erase.preflight()
         defaults = erase.load_defaults()
     except erase.Abort as e:
-        root.withdraw()
-        messagebox.showerror("TabulaRasa", str(e))
+        # Shown in the main window itself: in the kiosk a separate error dialog would stay invisible
+        root.title("TabulaRasa")
+        tk.Label(root, text=f"TabulaRasa cannot start:\n\n{e}", justify="left", fg=FAIL, bg=BG,
+                 font=("DejaVu Sans", 12), padx=40, pady=40).pack(fill="both", expand=True)
+        root.mainloop()
         sys.exit(1)
     App(root, defaults)
     root.mainloop()

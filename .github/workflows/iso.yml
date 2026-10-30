@@ -1,0 +1,55 @@
+name: ISO
+
+# Builds the live image. Pushes to main: ISO as a build artifact (7 days).
+# Tags v*: GitHub release with the ISO attached; tags containing "-" (v0.2.0-beta.1) become pre-releases.
+on:
+  push:
+    branches: [main]
+    tags: ["v*"]
+    paths: ["live/**", "*.py", "report.html", "requirements.txt", "config.example.toml", ".github/workflows/iso.yml"]
+  workflow_dispatch:
+
+jobs:
+  iso:
+    runs-on: ubuntu-latest
+    container:
+      image: debian:trixie
+      options: --privileged  # live-build mounts /proc etc. inside its chroot
+    steps:
+      - uses: actions/checkout@v5
+      - run: apt-get update && apt-get install -y live-build
+      - run: live/build.sh
+      - name: Check size and write checksum
+        working-directory: live
+        run: |
+          name="tabularasa-${GITHUB_REF_NAME}.iso"
+          mv tabularasa.iso "$name"
+          size=$(stat -c %s "$name")
+          echo "ISO size: $((size / 1024 / 1024)) MiB"
+          # GitHub release assets max. 2 GiB; make-stick.sh reserves 4 GiB for the system
+          [ "$size" -lt 2147483648 ] || { echo "ISO is larger than 2 GiB"; exit 1; }
+          sha256sum "$name" > "$name.sha256"
+      - uses: actions/upload-artifact@v4
+        with:
+          name: iso
+          path: live/tabularasa-*.iso*
+          retention-days: 7
+          compression-level: 0  # squashfs is already compressed
+
+  release:
+    if: startsWith(github.ref, 'refs/tags/v')
+    needs: iso
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          name: iso
+      - env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          pre=""
+          case "$GITHUB_REF_NAME" in *-*) pre="--prerelease" ;; esac
+          gh release create "$GITHUB_REF_NAME" --repo "$GITHUB_REPOSITORY" --title "TabulaRasa $GITHUB_REF_NAME" \
+            --generate-notes $pre tabularasa-*.iso tabularasa-*.iso.sha256

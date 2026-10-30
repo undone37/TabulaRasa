@@ -10,5 +10,5 @@ lb config noauto \
 	--memtest none \
 	--iso-volume TABULARASA \
 	--image-name tabularasa \
-	--bootappend-live "boot=live components quiet timezone=Europe/Berlin utc=no" \
+	--bootappend-live "boot=live components quiet noautologin timezone=Europe/Berlin utc=no" \
 	"${@}"

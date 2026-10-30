@@ -1,5 +1,6 @@
 # Kiosk
 cage
+seatd
 xwayland
 # Live system
 live-boot

@@ -1,23 +1,28 @@
-# Cage with the TabulaRasa GUI on tty1 (pattern from the Cage documentation, here as root)
+# Cage with the TabulaRasa GUI on tty1. Screen and input access via seatd (no logind/PAM session needed).
 [Unit]
 Description=TabulaRasa (kiosk)
-After=systemd-user-sessions.service plymouth-quit-wait.service dbus.socket systemd-logind.service getty@tty1.service
-Wants=dbus.socket systemd-logind.service
+After=systemd-user-sessions.service seatd.service getty@tty1.service
+Wants=seatd.service
 Conflicts=getty@tty1.service
 ConditionPathExists=/dev/tty0
+StartLimitIntervalSec=0
 
 [Service]
 ExecStart=/usr/local/bin/tabularasa-kiosk
 Restart=always
+RestartSec=2
 User=root
-UtmpIdentifier=tty1
-UtmpMode=user
+# Without a logind session nobody creates the Wayland runtime directory
+RuntimeDirectory=tabularasa
+RuntimeDirectoryMode=0700
+Environment=XDG_RUNTIME_DIR=/run/tabularasa
 TTYPath=/dev/tty1
 TTYReset=yes
 TTYVHangup=yes
 TTYVTDisallocate=yes
 StandardInput=tty-fail
-PAMName=tabularasa-kiosk
+StandardOutput=journal
+StandardError=journal
 
 [Install]
 WantedBy=multi-user.target
