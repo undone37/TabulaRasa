@@ -1,8 +1,14 @@
 # Defaults for the input fields. Copy to config.toml (live stick: onto the REPORTS partition)
 # and adjust. Every value can still be changed in the program before erasing.
 
-language = "en"  # report language: "en" or "de" (the program itself is always English)
+language = "en"      # report language: "en" or "de"
+gui_language = "en"  # language of the window: "en" or "de" (switchable in the window; the terminal version is English)
 keyboard = "us"  # live stick only: keyboard layout, e.g. "us", "de", "gb", "fr"
+# Default erasure standard (can be changed in the window before each run):
+#   "nist"     NIST SP 800-88: zeros + verify (HDD, Clear), ATA Secure Erase / NVMe Format (SSD, Purge)
+#   "bsi"      BSI IT-Grundschutz M 2.167 / M 2.433, normal protection: 1 pass of random data + verify
+#   "bsi-high" BSI IT-Grundschutz M 2.167 / M 2.433, high protection: 3 passes of random data + verify
+standard = "nist"
 
 [company]
 name = "Example Ltd"

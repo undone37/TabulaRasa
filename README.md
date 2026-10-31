@@ -2,17 +2,21 @@
 
 Erases HDDs, SATA SSDs and NVMe SSDs and writes one PDF report per drive (cover page, certificate, appendices with SMART data, a hexdump spot check and the tool logs). Reports are available in German and English.
 
-| Drive | Method | NIST 800-88 |
-|---|---|---|
-| HDD | `nwipe`: 1 pass of zeros + verification | Clear |
-| SATA SSD | ATA Secure Erase (Enhanced if supported) | Purge |
-| NVMe SSD | `nvme format --ses=1` | Purge |
+Choose the erasure standard per run in the window (default from `config.toml`):
+
+| Standard | HDD | SATA SSD | NVMe SSD |
+|---|---|---|---|
+| NIST SP 800-88 | `nwipe`: 1 pass of zeros + verification (Clear) | ATA Secure Erase, Enhanced if supported (Purge) | `nvme format --ses=1` (Purge) |
+| BSI (normal) | `nwipe`: 1 pass of random data (ISAAC-64) + verification | same | same |
+| BSI (high) | `nwipe`: 3 passes of random data + verification of the last pass | same | same |
+
+BSI refers to IT-Grundschutz measures M 2.167 and M 2.433: overwrite with random data and verify, one pass for normal and "at least two, but three are better" for high protection requirements. ATA/NVMe firmware commands do not write random data, so BSI mode overwrites every drive type with nwipe. BSI-TL 03420 (classified information) is not covered: it requires BSI-approved products.
 
 Several drives can be erased in one run, each with its own comment and report. ATA/NVMe drives run one after another, several nwipe runs in parallel. Frozen ATA drives are handled via standby (S3) or by asking you to replug the drive.
 
 ## Screenshots
 
-Erasing three drives at once: ATA Secure Erase with the vendor's time estimate, two nwipe runs with measured progress. The boot stick itself is locked.
+Erasing three drives at once to BSI (high), each with 3 passes of random data and measured progress. The boot stick itself is locked.
 
 ![Main window during erasure](docs/screenshot-gui.png)
 
@@ -20,7 +24,7 @@ Nothing is erased without typing `yes`:
 
 ![Confirmation dialog](docs/screenshot-confirm.png)
 
-The report (cover page and certificate, here in English; appendices with SMART data, hexdump and logs follow):
+The report (cover page and certificate, here in English with BSI (high); appendices with SMART data, hexdump and logs follow):
 
 ![Report cover page and certificate](docs/screenshot-report.png)
 
@@ -44,7 +48,7 @@ Everything company-specific lives in one folder: by default next to `erase.py`, 
 
 | File | Content | If missing |
 |---|---|---|
-| `config.toml` | report language, company defaults, place, keyboard layout (template: `config.example.toml`) | German report, empty fields |
+| `config.toml` | report language, window language, default standard, company defaults, place, keyboard layout (template: `config.example.toml`) | German report, English window, NIST, empty fields |
 | `logo.png` | logo for report and window | no logo |
 | `signature.png` | signature on the certificate | no signature |
 | `reports/` | generated reports and nwipe logs | created automatically |
@@ -57,6 +61,8 @@ The window scales the logo with ImageMagick; without it the logo looks pixelated
 sudo .venv/bin/python gui.py     # window
 sudo .venv/bin/python erase.py   # terminal
 ```
+
+The window is available in English and German (`gui_language` in `config.toml`, or the EN/DE switch at the top; entries are kept). The terminal version and the output pane are English.
 
 If the window does not open on Wayland (`Cannot open a window`), run `xhost +SI:localuser:root` once as your normal user.
 

@@ -58,9 +58,21 @@ CONFIG_KEYS = {"name": "biz_name", "address": "biz_address", "contact": "biz_con
 
 # method: (drive kind, NIST 800-88 level, warning shown before erasing, required tool)
 METHODS = {
-    "ata": ("SSD", "NIST 800-88 Purge", "ATA SECURE ERASE", "hdparm"),
-    "nvme": ("NVMe-SSD", "NIST 800-88 Purge", "NVMe FORMAT / USER DATA ERASE", "nvme"),
-    "nwipe": ("HDD", "NIST 800-88 Clear", "OVERWRITE WITH ZEROS + VERIFY", "nwipe"),
+    "ata": ("SSD", "Purge", "ATA SECURE ERASE", "hdparm"),
+    "nvme": ("NVMe-SSD", "Purge", "NVMe FORMAT / USER DATA ERASE", "nvme"),
+    "nwipe": ("HDD", "Clear", "OVERWRITE WITH ZEROS + VERIFY", "nwipe"),
+    "random": ("HDD/SSD", None, "OVERWRITE WITH RANDOM DATA + VERIFY", "nwipe"),
+}
+NWIPE_METHODS = ("nwipe", "random")  # run in parallel, progress from the kernel's I/O counters
+
+# Erasure standards (config.toml: standard = ...): allowed methods and overwrite passes.
+# BSI IT-Grundschutz M 2.167 / M 2.433: overwrite with random data and verify; normal protection
+# requirement 1 pass, high "at least two, but three are better". ATA/NVMe firmware commands do not
+# write random data, so BSI only allows "random".
+STANDARDS = {
+    "nist": {"label": "NIST SP 800-88", "methods": ("ata", "nvme", "nwipe"), "rounds": 1},
+    "bsi": {"label": "BSI (normal)", "methods": ("random",), "rounds": 1},
+    "bsi-high": {"label": "BSI (high)", "methods": ("random",), "rounds": 3},
 }
 
 # All report texts. report.html only contains ${t_<key>} placeholders; the erase functions return
@@ -70,7 +82,7 @@ REPORT_TEXT = {
         "months": ["Januar", "Februar", "März", "April", "Mai", "Juni", "Juli",
                    "August", "September", "Oktober", "November", "Dezember"],
         "date": "{day:02d}. {month} {year}", "timestamp": "%d.%m.%Y %H:%M:%S", "place_date": "{place}, den {date}",
-        "title": "Protokoll zur Datenlöschung ({kind})", "subtitle": "Methode: {method} ({nist})",
+        "title": "Protokoll zur Datenlöschung ({kind})", "subtitle": "Methode: {method}",
         "ok": "ERFOLGREICH", "fail": "FEHLGESCHLAGEN", "na": "Nicht zutreffend",
         "cover_title": "Protokoll zur<br>Datenlöschung", "performed_by": "Durchgeführt von",
         "cert_title": "Zertifikat zur Datenlöschung",
@@ -94,6 +106,10 @@ REPORT_TEXT = {
         "nwipe_verified": "Letzter Durchgang vollständig zurückgelesen",
         "prng_zero": "Nicht zutreffend (Nullen)", "nwipe_exit": "nwipe Exit-Code {code}",
         "no_log": "(kein Protokoll erzeugt)",
+        "standard": "Norm", "std_nist": "NIST SP 800-88 Rev. 1, {level}",
+        "std_bsi": "BSI IT-Grundschutz M 2.167 / M 2.433, Schutzbedarf normal",
+        "std_bsi-high": "BSI IT-Grundschutz M 2.167 / M 2.433, Schutzbedarf hoch",
+        "nwipe_random": "Überschreiben mit Zufallsdaten (nwipe)", "prng_isaac64": "ISAAC-64",
         "appx_smart_before": "SMART Werte vor der Löschung", "appx_smart_after": "SMART Werte nach erfolgter Löschung",
         "appx_hexdump": "Stichproben-Verifizierung (Hexdump nach dem Löschen)",
         "appx_hdparm": "Ausgabe hdparm", "appx_nvme": "Ausgabe nvme format",
@@ -103,7 +119,7 @@ REPORT_TEXT = {
         "months": ["January", "February", "March", "April", "May", "June", "July",
                    "August", "September", "October", "November", "December"],
         "date": "{day} {month} {year}", "timestamp": "%Y-%m-%d %H:%M:%S", "place_date": "{place}, {date}",
-        "title": "Data Erasure Report ({kind})", "subtitle": "Method: {method} ({nist})",
+        "title": "Data Erasure Report ({kind})", "subtitle": "Method: {method}",
         "ok": "SUCCESSFUL", "fail": "FAILED", "na": "Not applicable",
         "cover_title": "Data Erasure<br>Report", "performed_by": "Performed by",
         "cert_title": "Certificate of Data Erasure",
@@ -127,6 +143,10 @@ REPORT_TEXT = {
         "nwipe_verified": "Last pass fully read back",
         "prng_zero": "Not applicable (zeros)", "nwipe_exit": "nwipe exit code {code}",
         "no_log": "(no log written)",
+        "standard": "Standard", "std_nist": "NIST SP 800-88 Rev. 1, {level}",
+        "std_bsi": "BSI IT-Grundschutz M 2.167 / M 2.433, normal protection requirement",
+        "std_bsi-high": "BSI IT-Grundschutz M 2.167 / M 2.433, high protection requirement",
+        "nwipe_random": "Overwrite with random data (nwipe)", "prng_isaac64": "ISAAC-64",
         "appx_smart_before": "SMART values before erasure", "appx_smart_after": "SMART values after erasure",
         "appx_hexdump": "Spot check (hexdump after erasure)",
         "appx_hdparm": "hdparm output", "appx_nvme": "nvme format output",
@@ -156,7 +176,9 @@ def is_true(value):
     return str(value).strip().lower() in ("1", "true")
 
 
-def pick_method(tran, rota):
+def pick_method(tran, rota, standard="nist"):
+    if standard != "nist":
+        return STANDARDS[standard]["methods"][0]
     if (tran or "").lower() == "nvme":
         return "nvme"
     return "nwipe" if is_true(rota) else "ata"
@@ -199,8 +221,21 @@ def parse_config(text):
     language = cfg.get("language", "de")
     if language not in REPORT_TEXT:
         raise ValueError(f"language = {language!r}, supported: {', '.join(REPORT_TEXT)}")
+    gui_language = cfg.get("gui_language", "en")
+    if gui_language not in ("de", "en"):
+        raise ValueError(f"gui_language = {gui_language!r}, supported: de, en")
+    standard = cfg.get("standard", "nist")
+    if standard not in STANDARDS:
+        raise ValueError(f"standard = {standard!r}, supported: {', '.join(STANDARDS)}")
     company = cfg.get("company", {})
-    return {"language": language, **{CONFIG_KEYS[k]: str(v) for k, v in company.items() if k in CONFIG_KEYS}}
+    return {"language": language, "gui_language": gui_language, "standard": standard,
+            **{CONFIG_KEYS[k]: str(v) for k, v in company.items() if k in CONFIG_KEYS}}
+
+
+def standard_text(method, standard, lang="en"):
+    """The standard as stated on the report, e.g. 'NIST SP 800-88 Rev. 1, Purge'."""
+    t = REPORT_TEXT[lang]
+    return t["std_nist"].format(level=METHODS[method][1]) if standard == "nist" else t[f"std_{standard}"]
 
 
 def erase_minutes(hdparm_i):
@@ -210,26 +245,37 @@ def erase_minutes(hdparm_i):
     return int(m.group(1)) if m else None
 
 
-def progress(method, size, elapsed, io_delta=None, ata_minutes=None, now=None):
+# Text fragments of the progress line; the GUI passes translated ones
+PROGRESS_EN = {"writing": "writing", "writing_pass": "writing pass {n}/{rounds}", "verifying": "verifying",
+               "eta": "{left} left · done ~{end}"}
+
+
+def progress(method, size, elapsed, io_delta=None, ata_minutes=None, now=None, rounds=1, words=PROGRESS_EN):
     """(fraction 0..1 or None, text) for the GUI progress display.
 
-    nwipe: bytes written + read (pass + verify) against 2x the drive size.
+    nwipe: bytes written + read (all passes + verify of the last one) against (rounds + 1) x drive size.
     ata:   the firmware erases internally, so only elapsed time against the vendor estimate, capped at 99 %.
     """
     def eta(seconds):
         now_ = now or datetime.now()
         end = now_ + timedelta(seconds=seconds)
         fmt = "%H:%M" if end.date() == now_.date() else "%Y-%m-%d %H:%M"
-        return f"{hms(int(seconds))} left · done ~{end:{fmt}}"
+        return words["eta"].format(left=hms(int(seconds)), end=f"{end:{fmt}}")
 
-    if method == "nwipe" and io_delta and elapsed > 0:
+    if method in NWIPE_METHODS and io_delta and elapsed > 0:
         read, written = io_delta
-        done = min(written, size) + min(read, size)
-        frac = done / (2 * size)
-        phase = "verifying" if written >= size else "writing"
+        total = (rounds + 1) * size
+        done = min(written, rounds * size) + min(read, size)
+        frac = done / total
+        if written >= rounds * size:
+            phase = words["verifying"]
+        elif rounds > 1:
+            phase = words["writing_pass"].format(n=written // size + 1, rounds=rounds)
+        else:
+            phase = words["writing"]
         rate = done / elapsed
         text = f"{frac:.0%} {phase} · {rate / 1e6:.0f} MB/s"
-        return frac, f"{text} · {eta((2 * size - done) / rate)}" if rate else text
+        return frac, f"{text} · {eta((total - done) / rate)}" if rate else text
     if method == "ata" and ata_minutes:
         total = ata_minutes * 60
         frac = min(elapsed / total, 0.99)
@@ -331,8 +377,10 @@ def security_status(device):
     return parse_security(run(["hdparm", "-I", device]).stdout)
 
 
-def ask_continue(msg):
-    return ask(f"\n{msg}, then press Enter ('abort' to give up): ").strip() != "abort"
+def ask_continue(serial):
+    """Terminal version of the replug question (the GUI asks with its own, translated dialog)."""
+    return ask(f"\nUnplug and replug the SATA power cable of {serial} while the machine is running, "
+               "then press Enter ('abort' to give up): ").strip() != "abort"
 
 
 def io_bytes(device):
@@ -344,11 +392,12 @@ def io_bytes(device):
         return None
 
 
-def progress_of(d):
+def progress_of(d, words=PROGRESS_EN):
     """Progress of a drive running in run_all (fields: started, io_start, ata_minutes)."""
     now_io = io_bytes(d["device"]) if d["io_start"] else None
     delta = (now_io[0] - d["io_start"][0], now_io[1] - d["io_start"][1]) if now_io else None
-    return progress(d["method"], int(d["info"]["size"]), time.time() - d["started"], delta, d["ata_minutes"])
+    return progress(d["method"], int(d["info"]["size"]), time.time() - d["started"], delta, d["ata_minutes"],
+                    rounds=d.get("rounds", 1), words=words)
 
 
 def list_disks():
@@ -379,7 +428,7 @@ def unfreeze(device, serial, prompt=ask_continue):
     if not serial:
         die("Drive has no serial number and cannot be found reliably after a hot-plug. Use method 'nwipe'.")
     while True:
-        if not prompt(f"Unplug and replug the SATA power cable of {serial} while the machine is running"):
+        if not prompt(serial):
             die("Aborted by user, drive is still frozen.")
         time.sleep(3)  # the kernel needs a moment after plugging in
         new = find_by_serial(run(["lsblk", "-J", "-d", "-o", "PATH,TYPE,SERIAL"]).stdout, serial)
@@ -441,16 +490,26 @@ def erase_nvme(device):
     return r.returncode == 0, fields, [("appx_nvme", output)]
 
 
-def erase_nwipe(device, log_file, quiet=False):
-    step(f"Overwrite with zeros + verification (nwipe) on {device}")
+def erase_nwipe(device, log_file, quiet=False, random=False, rounds=1):
+    """Zeros (NIST Clear) or random data (BSI) with verification of the last pass."""
+    kind = f"random data, {rounds} pass(es)" if random else "zeros"
+    step(f"Overwrite with {kind} + verification (nwipe) on {device}")
     print("This can take many hours. Please wait...")
+    if random:
+        # --noblank: otherwise nwipe ends with a zero pass, and only that would be verified
+        how = ["--method=random", "--prng=isaac64", f"--rounds={rounds}", "--noblank"]
+    else:
+        how = ["--method=zero", "--rounds=1"]
+    # nwipe >= 0.35 writes its own PDF reports into the current folder unless told not to
+    no_pdf = ["-P", "noPDF"] if "PDFreportpath" in run(["nwipe", "--help"]).stdout else []
     # Single run: pass the output through, so nwipe shows its progress directly.
     # Parallel (quiet): discard stdout or the runs get mixed up; the log is in log_file.
-    code = subprocess.run(["nwipe", "--autonuke", "--nogui", "--method=zero", "--rounds=1",
-                           "--verify=last", f"--logfile={log_file}", device],
+    code = subprocess.run(["nwipe", "--autonuke", "--nogui", *how, "--verify=last", *no_pdf,
+                           f"--logfile={log_file}", device],
                           stdout=subprocess.DEVNULL if quiet else None, check=False).returncode
     log = log_file.read_text(errors="replace") if log_file.exists() else None
-    fields = {"erase_method": "nwipe_zero", "rounds": "1", "prng": "prng_zero",
+    fields = {"erase_method": "nwipe_random" if random else "nwipe_zero", "rounds": str(rounds),
+              "prng": "prng_isaac64" if random else "prng_zero",
               "errors": ("nwipe_exit", code), "verification": "nwipe_verified"}
     return code == 0, fields, [("appx_nwipe", log)]
 
@@ -466,6 +525,9 @@ def main():
     defaults = load_defaults()
     meta = {key: ask(f"{label}: ", defaults.get(key, "-")) for key, label in META_FIELDS}
     meta["place"], meta["language"] = defaults.get("place", ""), defaults["language"]
+    standard = meta["standard"] = defaults["standard"]
+    allowed = STANDARDS[standard]["methods"]
+    print(f"\nStandard: {YELLOW}{STANDARDS[standard]['label']}{NC} (config.toml: standard = \"nist\" | \"bsi\" | \"bsi-high\")")
     print("\nAvailable drives:")
     subprocess.run(["lsblk", "-d", "-o", "NAME,SIZE,ROTA,TRAN,MODEL,SERIAL"], check=False)
     names = ask("\nDevice names of the drives to erase, separated by spaces (e.g. /dev/sda /dev/sdb): ").split()
@@ -485,13 +547,13 @@ def main():
             die(f"'{device}' was given twice.")
         seen.add(key)
 
-        auto = pick_method(info["tran"], info["rota"])
+        auto = pick_method(info["tran"], info["rota"], standard)
         print(f"\n{YELLOW}{device}{NC}: {info['model']} / {serial or '?'} / {size_gb(int(info['size']))}")
         print(f"Detected: bus={YELLOW}{info['tran'].upper() or '?'}{NC}, "
               f"rotational={YELLOW}{'yes' if is_true(info['rota']) else 'no'}{NC} -> suggestion: {YELLOW}{auto}{NC}")
         while True:
-            method = ask("Erase method (ata/nvme/nwipe): ", auto).strip()
-            if method not in METHODS:
+            method = ask(f"Erase method ({'/'.join(allowed)}): ", auto).strip()
+            if method not in allowed:
                 print(f"{RED}Unknown method '{method}'.{NC}")
                 continue
             need(METHODS[method][3])
@@ -507,9 +569,9 @@ def main():
     print(f"\n{RED}!!!!!!!!!!!!!!!!!!!!!!!!!!!!!! WARNING !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!{NC}")
     print(f"You selected {len(disks)} drive(s):")
     for d in disks:
-        _, nist, warn, _ = METHODS[d["method"]]
         print(f"  {YELLOW}{d['device']}{NC} ({d['info']['model']} / {d['serial']} / "
-              f"{size_gb(int(d['info']['size']))}): {RED}{warn} ({nist}){NC}")
+              f"{size_gb(int(d['info']['size']))}): {RED}{METHODS[d['method']][2]} "
+              f"({standard_text(d['method'], standard)}){NC}")
     print(f"This will {RED}IRREVERSIBLY DESTROY ALL DATA ON THESE DRIVES{NC}.")
     print(f"{RED}!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!{NC}\n")
     if input("Are you absolutely sure you want to continue? (yes/no): ").strip() != "yes":
@@ -535,7 +597,7 @@ def give_to_user(*paths):
 
 def load_defaults():
     if not CONFIG.exists():
-        return {"language": "de"}
+        return {"language": "de", "gui_language": "en", "standard": "nist"}
     try:
         # utf-8-sig: Windows Notepad likes to put a BOM in front
         return parse_config(CONFIG.read_text(encoding="utf-8-sig"))
@@ -578,7 +640,7 @@ def run_all(disks, meta, prompt=ask_continue, quiet=False, on_status=lambda d: N
 
     def erase_one(d, quiet=False):
         # Measuring points for progress_of(), set before "RUNNING" so the GUI has them on its first poll
-        d.update(started=time.time(), io_start=io_bytes(d["device"]),
+        d.update(started=time.time(), io_start=io_bytes(d["device"]), rounds=STANDARDS[meta["standard"]]["rounds"],
                  ata_minutes=erase_minutes(run(["hdparm", "-I", d["device"]]).stdout) if d["method"] == "ata" else None)
         set_result(d, "RUNNING")
         print(f"\n{YELLOW}===== Drive {d['device']} ({d['serial']}) ====={NC}")
@@ -594,9 +656,9 @@ def run_all(disks, meta, prompt=ask_continue, quiet=False, on_status=lambda d: N
     todo = [d for d in disks if d["result"] is None]
     # ATA/NVMe take minutes and run one after another, nwipe takes hours and runs in parallel
     for d in todo:
-        if d["method"] != "nwipe":
+        if d["method"] not in NWIPE_METHODS:
             erase_one(d)
-    wipes = [d for d in todo if d["method"] == "nwipe"]
+    wipes = [d for d in todo if d["method"] in NWIPE_METHODS]
     if len(wipes) > 1:
         print(f"\n{YELLOW}Starting {len(wipes)} nwipe runs in parallel. Progress: tail -f reports/nwipe_*.log{NC}")
     with ThreadPoolExecutor(max(len(wipes), 1)) as pool:
@@ -606,7 +668,9 @@ def run_all(disks, meta, prompt=ask_continue, quiet=False, on_status=lambda d: N
 def erase_disk(d, shared_meta, quiet=False):
     """Erase one drive and write its report. Returns the result as UI text."""
     device, info, serial, method = d["device"], d["info"], d["serial"], d["method"]
-    drive_kind, nist, _, _ = METHODS[method]
+    drive_kind = METHODS[method][0]
+    standard = shared_meta["standard"]
+    rounds = STANDARDS[standard]["rounds"]
     meta = dict(shared_meta)
     if d["comment"]:
         meta["comment"] = d["comment"]
@@ -626,7 +690,7 @@ def erase_disk(d, shared_meta, quiet=False):
     elif method == "nvme":
         ok, fields, extra = erase_nvme(device)
     else:
-        ok, fields, extra = erase_nwipe(device, nwipe_log, quiet)
+        ok, fields, extra = erase_nwipe(device, nwipe_log, quiet, random=method == "random", rounds=rounds)
     end = datetime.now()
     seconds = int((end - start).total_seconds())
 
@@ -641,7 +705,8 @@ def erase_disk(d, shared_meta, quiet=False):
 
     meta.update({
         "title": t["title"].format(kind=drive_kind),
-        "subtitle": t["subtitle"].format(method=translate(fields["erase_method"]), nist=nist),
+        "subtitle": t["subtitle"].format(method=translate(fields["erase_method"])),
+        "standard_text": standard_text(method, standard, lang),
         "author": meta["biz_contact"],
         "date": format_date(end, lang),
         "device": device, "drive_model": info["model"].strip(), "drive_serial": serial,
@@ -655,8 +720,9 @@ def erase_disk(d, shared_meta, quiet=False):
         "ok": ok,
     })
     meta.update({k: translate(v) for k, v in fields.items()})
-    if method == "nwipe" and seconds > 0:
-        meta["throughput"] = t["throughput_verify"].format(mbs=size // seconds // 1000000)
+    if method in NWIPE_METHODS and seconds > 0:
+        # all passes plus the verification read
+        meta["throughput"] = t["throughput_verify"].format(mbs=(rounds + 1) * size // seconds // 1000000)
 
     step(f"Writing report for {device}")
     appendices = [

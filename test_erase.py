@@ -41,7 +41,7 @@ def sample_meta(**overrides):
         "cust_name", "cust_address", "cust_contact", "cust_phone", "drive_model", "drive_serial",
         "drive_size_gb", "drive_size_bytes", "bus_type", "start_time", "end_time", "duration",
         "erase_method", "prng", "rounds", "verification", "bytes_erased", "throughput",
-        "hpa_dco_status", "errors")}
+        "hpa_dco_status", "errors", "standard_text")}
     meta["ok"] = True
     meta.update(overrides)
     return meta
@@ -55,6 +55,19 @@ class Logic(unittest.TestCase):
         self.assertEqual(erase.pick_method("sata", "0"), "ata")
         self.assertEqual(erase.pick_method("sata", False), "ata")
         self.assertEqual(erase.pick_method("", "false"), "ata")
+        for standard in ("bsi", "bsi-high"):  # BSI: random data for every drive type
+            self.assertEqual(erase.pick_method("nvme", False, standard), "random")
+            self.assertEqual(erase.pick_method("sata", "1", standard), "random")
+
+    def test_standards(self):
+        self.assertEqual(erase.standard_text("ata", "nist"), "NIST SP 800-88 Rev. 1, Purge")
+        self.assertEqual(erase.standard_text("nwipe", "nist"), "NIST SP 800-88 Rev. 1, Clear")
+        self.assertEqual(erase.standard_text("random", "bsi-high", "de"),
+                         "BSI IT-Grundschutz M 2.167 / M 2.433, Schutzbedarf hoch")
+        self.assertEqual(erase.STANDARDS["bsi"]["rounds"], 1)
+        self.assertEqual(erase.STANDARDS["bsi-high"]["rounds"], 3)  # M 2.433: "three are better"
+        for std in erase.STANDARDS.values():
+            self.assertTrue(set(std["methods"]) <= set(erase.METHODS))
 
     def test_parse_security_negative_lines(self):
         s = erase.parse_security(HDPARM_NOT_ENABLED)
@@ -91,15 +104,22 @@ class Logic(unittest.TestCase):
         self.assertEqual(d["place"], "Exampletown")
         self.assertEqual(d["language"], "en")
         self.assertNotIn("unknown", d)
-        self.assertEqual(erase.parse_config(""), {"language": "de"})
+        self.assertEqual(d["standard"], "nist")
+        self.assertEqual(erase.parse_config(""), {"language": "de", "gui_language": "en", "standard": "nist"})
+        self.assertEqual(erase.parse_config('gui_language = "de"')["gui_language"], "de")
+        with self.assertRaisesRegex(ValueError, "gui_language"):
+            erase.parse_config('gui_language = "fr"')
+        self.assertEqual(erase.parse_config('standard = "bsi-high"')["standard"], "bsi-high")
         with self.assertRaisesRegex(ValueError, "supported: de, en"):
             erase.parse_config('language = "fr"')
+        with self.assertRaisesRegex(ValueError, "supported: nist, bsi, bsi-high"):
+            erase.parse_config('standard = "dod"')
 
     def test_place_and_date(self):
-        page = erase.build_html(sample_meta(place="Greven", date="30. Oktober 2026", language="de"), [])
-        self.assertIn("Greven, den 30. Oktober 2026", page)
-        page = erase.build_html(sample_meta(place="Greven", date="30 October 2026", language="en"), [])
-        self.assertIn("Greven, 30 October 2026", page)
+        page = erase.build_html(sample_meta(place="Exampletown", date="30. Oktober 2026", language="de"), [])
+        self.assertIn("Exampletown, den 30. Oktober 2026", page)
+        page = erase.build_html(sample_meta(place="Exampletown", date="30 October 2026", language="en"), [])
+        self.assertIn("Exampletown, 30 October 2026", page)
         self.assertNotIn(", den", erase.build_html(sample_meta(), []))  # without a place only the date
 
     def test_report_languages(self):
@@ -116,6 +136,26 @@ class Logic(unittest.TestCase):
         template = erase.TEMPLATE.read_text(encoding="utf-8")
         for key in re.findall(r"\$\{t_(\w+)\}", template):
             self.assertIn(key, de)
+
+    def test_gui_texts_complete(self):
+        import string
+
+        import gui
+        en, de = gui.UI_TEXT["en"], gui.UI_TEXT["de"]
+        self.assertEqual(en.keys(), de.keys())
+        for key, value in en.items():
+            if isinstance(value, dict):
+                self.assertEqual(value.keys(), de[key].keys(), key)
+            elif isinstance(value, list):
+                self.assertEqual([len(r) for r in value] if isinstance(value[0], tuple) else len(value),
+                                 [len(r) for r in de[key]] if isinstance(de[key][0], tuple) else len(de[key]), key)
+            else:  # same {placeholders} in both languages
+                fields = lambda s: sorted(f for _, f, _, _ in string.Formatter().parse(s) if f)
+                self.assertEqual(fields(value), fields(de[key]), key)
+        self.assertEqual(en["fields"].keys(), {k for k, _ in erase.META_FIELDS})
+        self.assertEqual(en["std_labels"].keys(), erase.STANDARDS.keys())
+        self.assertEqual(en["method_warn"].keys(), erase.METHODS.keys())
+        self.assertEqual(en["progress"].keys(), de["progress"].keys())
 
     def test_erase_minutes(self):
         self.assertEqual(erase.erase_minutes(HDPARM_NOT_ENABLED), 2)
@@ -141,6 +181,19 @@ class Logic(unittest.TestCase):
         self.assertRegex(text, r"done ~\d{4}-\d\d-\d\d \d\d:\d\d$")
         self.assertEqual(erase.progress("nvme", gb, 10), (None, ""))
         self.assertEqual(erase.progress("nwipe", gb, 10, None), (None, ""))  # no counters: animation
+        # BSI high: 3 random passes + verify = 4x the drive size
+        frac, text = erase.progress("random", gb, 100, (0, gb // 2), now=now, rounds=3)
+        self.assertEqual(frac, 0.125)
+        self.assertTrue(text.startswith("12% writing pass 1/3"))
+        frac, text = erase.progress("random", gb, 100, (0, 2 * gb + gb // 2), now=now, rounds=3)
+        self.assertTrue(text.startswith("62% writing pass 3/3"))
+        frac, text = erase.progress("random", gb, 100, (gb // 2, 3 * gb), now=now, rounds=3)
+        self.assertEqual(frac, 0.875)
+        self.assertTrue(text.startswith("88% verifying"))
+        words = {"writing": "schreibt", "writing_pass": "schreibt Durchgang {n}/{rounds}", "verifying": "prüft",
+                 "eta": "noch {left} · fertig ca. {end}"}
+        _, text = erase.progress("random", gb, 100, (0, gb // 2), now=now, rounds=3, words=words)
+        self.assertEqual(text, "12% schreibt Durchgang 1/3 · 5 MB/s · noch 00:11:40 · fertig ca. 12:11")
 
     def test_parse_disks_marks_mounted(self):
         out = ('{"blockdevices": ['

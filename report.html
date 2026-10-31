@@ -58,7 +58,7 @@
 <section class="cover">
   ${logo}
   <div class="title">${t_cover_title}</div>
-  <div class="subtitle">${subtitle}</div>
+  <div class="subtitle">${subtitle}<br>${standard_text}</div>
   <div class="badge ${status_class}">${final_result}</div>
   <div class="facts">
     <div><div class="label">${t_model}</div><div class="value">${drive_model}</div></div>
@@ -94,6 +94,7 @@
 
   <table>
     <tr><th class="section" colspan="4">${t_section_erase}</th></tr>
+    <tr><td class="k">${t_standard}</td><td class="v" colspan="3">${standard_text}</td></tr>
     <tr><td class="k">${t_start}</td><td class="v">${start_time}</td><td class="k">${t_end}</td><td class="v">${end_time}</td></tr>
     <tr><td class="k">${t_duration}</td><td class="v">${duration}</td><td class="k">${t_status}</td><td class="v status ${status_class}">${final_result}</td></tr>
     <tr><td class="k">${t_method}</td><td class="v">${erase_method}</td><td class="k">${t_prng}</td><td class="v">${prng}</td></tr>
